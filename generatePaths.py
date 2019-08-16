@@ -148,7 +148,7 @@ def simulateForagingAndSaveResults(initialWorldStateFile,wayPointsFile,timeStep,
         print(t)
     ani = animateForaging.animateForaging(robotsDF,littersDF,nestDF,foragingWayPointsDF.keys())
     vidname = wayPointsFile.replace('.xy','-litProcessing-') + str(litProcessingTime) + 's.mp4'
-    ani.save('plots/' + vidname)
+    ani.save('plots/mp4/' + vidname)
     
     fig,ax = plt.subplots()
     nestDF.plot(x='tPlusProcessing',y='litterCount',ax=ax)
@@ -157,9 +157,9 @@ def simulateForagingAndSaveResults(initialWorldStateFile,wayPointsFile,timeStep,
     ax.legend().remove()
     ax.set_ylabel('Litter in Nest')
     ax.set_xlabel('Time in seconds')
-    fig.savefig('plots/' + vidname[:-4] + '.pdf',bbox_inches='tight')
+    fig.savefig('plots/pdf/' + vidname[:-4] + '.pdf',bbox_inches='tight')
     plt.close()
-    nestDF.to_csv('plots/' + vidname[:-4] + '.csv')
+    nestDF.to_csv('plots/csv/' + vidname[:-4] + '.csv')
 
 def loopThroughDataFiles():
     timeStep = 1 # second
