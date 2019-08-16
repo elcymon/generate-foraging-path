@@ -4,6 +4,9 @@ import numpy as np
 import re
 from scipy.spatial.distance import euclidean
 import matplotlib.pyplot as plt
+from glob import glob
+import animateForaging
+import ntpath
 
 def loadInitialState(stateCSV):
     csvdf = pd.read_csv(stateCSV,sep=',')
@@ -87,72 +90,86 @@ def computeRobotStep(robotData,robotWayPoints,moveDistance):
     
     return robotData,robotWayPoints,action
 
-initialWorldStateFile = '20180208_w_swarm1_circular_one_region_cluster.csv'
-wayPointsFile = 'one_region_cluster-200.xy'
-robotsDF,littersDF,nestDF = loadInitialState('CSVresults/' + initialWorldStateFile)
-foragingWayPointsDF,robotsWaitingTime = loadforagingWayPointsAndWaitingTimes('results/' + wayPointsFile)
-t = 0
-timeStep = 1 # second
-litProcessingTime = 5 # seconds
-robotVelocity = 0.605 #metres/seconds
-moveDistance = robotVelocity * timeStep # distance is velocity x time
-while True:
-    #copy previous state of litter available and litter deposited in nest to default of current state
-    tStr = str(round(t,1))
-    tPlus1 = str(round(t + timeStep, 1))
-    littersDF.loc[:,tPlus1] = littersDF.loc[:,tStr].values
-    nestDF.loc[tPlus1,'litterCount'] = nestDF.loc[tStr,'litterCount']
-    nestDF.loc[tPlus1,'tPlusProcessing'] = nestDF.loc[tStr,'tPlusProcessing'] + timeStep
-    numRobotsFinishedWayPoints = 0
 
-    for robot in foragingWayPointsDF.keys():
-        action = None
-        robotData = robotsDF.loc[tStr,robot]
-        robotWayPoints = foragingWayPointsDF[robot]
-#        if t == 0:#remove start location for robot at initial time step
-#            robotWayPoints.pop(0)
-        if len(robotWayPoints) > 0 and robotsWaitingTime[robot] <= 0:
-            robotsWaitingTime[robot]  = 0 # by default robot does not wait
-            robotData,robotWayPoints,action = computeRobotStep(robotData,robotWayPoints,moveDistance)
-            if action != None:
-                action = action.lower()
-                if 'litter' in action:
-                    littersDF.loc[action,tPlus1] = False
-                    robotData['litterCount'] += 1
-                    robotsWaitingTime[robot] = litProcessingTime # process picked litter
-                elif 'reuse' in action or 'end' in action:
-                    nestDF.loc[tPlus1,'litterCount'] = nestDF.loc[tPlus1,'litterCount'] + robotData['litterCount']
-                    nestDF.loc[tPlus1,'tPlusProcessing'] = nestDF.loc[tPlus1,'tPlusProcessing'] + robotData['litterCount']
-                    
-                    robotData['litterCount'] = 0
-            robotsDF.loc[tPlus1,robot] = robotData.values
-#            print(robotData)
-#            print(robotsDF.loc[str(t+timeStep),robot])
-            
-        else:
-            robotsDF.loc[tPlus1,robot] = robotData.values
-            robotsWaitingTime[robot] -= timeStep
-        if len(robotWayPoints) == 0:
-            numRobotsFinishedWayPoints += 1
-    if numRobotsFinishedWayPoints == len(foragingWayPointsDF.keys()):
-        print('Task completed')
-        break
-#        if action != None:
-            
-    #increase time 
-    t = round(t + timeStep,1)
+def simulateForagingAndSaveResults(initialWorldStateFile,wayPointsFile,timeStep,litProcessingTime,robotVelocity):
+    robotsDF,littersDF,nestDF = loadInitialState('CSVresults/' + initialWorldStateFile)
+    foragingWayPointsDF,robotsWaitingTime = loadforagingWayPointsAndWaitingTimes('results/' + wayPointsFile)
+    t = 0
+    moveDistance = robotVelocity * timeStep # distance is velocity x time
+    while True:
+        #copy previous state of litter available and litter deposited in nest to default of current state
+        tStr = str(round(t,1))
+        tPlus1 = str(round(t + timeStep, 1))
+        littersDF.loc[:,tPlus1] = littersDF.loc[:,tStr].values
+        nestDF.loc[tPlus1,'litterCount'] = nestDF.loc[tStr,'litterCount']
+        nestDF.loc[tPlus1,'tPlusProcessing'] = nestDF.loc[tStr,'tPlusProcessing'] + timeStep
+        numRobotsFinishedWayPoints = 0
     
-    print(t)
-import animateForaging
-ani = animateForaging.animateForaging(robotsDF,littersDF,nestDF,foragingWayPointsDF.keys())
-vidname = wayPointsFile.replace('.xy','-litProcessing-') + str(litProcessingTime) + 's.mp4'
-ani.save('plots/' + vidname)
+        for robot in foragingWayPointsDF.keys():
+            action = None
+            robotData = robotsDF.loc[tStr,robot]
+            robotWayPoints = foragingWayPointsDF[robot]
+    #        if t == 0:#remove start location for robot at initial time step
+    #            robotWayPoints.pop(0)
+            if len(robotWayPoints) > 0 and robotsWaitingTime[robot] <= 0:
+                robotsWaitingTime[robot]  = 0 # by default robot does not wait
+                robotData,robotWayPoints,action = computeRobotStep(robotData,robotWayPoints,moveDistance)
+                if action != None:
+                    action = action.lower()
+                    if 'litter' in action:
+                        littersDF.loc[action,tPlus1] = False
+                        robotData['litterCount'] += 1
+                        robotsWaitingTime[robot] = litProcessingTime # process picked litter
+                    elif 'reuse' in action or 'end' in action:
+                        nestDF.loc[tPlus1,'litterCount'] = nestDF.loc[tPlus1,'litterCount'] + robotData['litterCount']
+                        nestDF.loc[tPlus1,'tPlusProcessing'] = nestDF.loc[tPlus1,'tPlusProcessing']
+                        
+                        robotData['litterCount'] = 0
+                robotsDF.loc[tPlus1,robot] = robotData.values
+    #            print(robotData)
+    #            print(robotsDF.loc[str(t+timeStep),robot])
+                
+            else:
+                robotsDF.loc[tPlus1,robot] = robotData.values
+                robotsWaitingTime[robot] -= timeStep
+            if robotsWaitingTime[robot] < 0:
+                robotsWaitingTime[robot] = 0
+                
+            if len(robotWayPoints) == 0:
+                numRobotsFinishedWayPoints += 1
+        if numRobotsFinishedWayPoints == len(foragingWayPointsDF.keys()):
+            print('Task completed')
+            break
+    #        if action != None:
+                
+        #increase time 
+        t = round(t + timeStep,1)
+        
+        print(t)
+    ani = animateForaging.animateForaging(robotsDF,littersDF,nestDF,foragingWayPointsDF.keys())
+    vidname = wayPointsFile.replace('.xy','-litProcessing-') + str(litProcessingTime) + 's.mp4'
+    ani.save('plots/' + vidname)
+    
+    fig,ax = plt.subplots()
+    nestDF.plot(x='tPlusProcessing',y='litterCount',ax=ax)
+    ax.set_ylim([0,210])
+    ax.set_xlim([0,nestDF['tPlusProcessing'].iloc[-1] * 1.05])
+    ax.legend().remove()
+    ax.set_ylabel('Litter in Nest')
+    ax.set_xlabel('Time in seconds')
+    fig.savefig('plots/' + vidname[:-4] + '.pdf',bbox_inches='tight')
+    plt.close()
+    nestDF.to_csv('plots/' + vidname[:-4] + '.csv')
 
-fig,ax = plt.subplots()
-nestDF.plot(x='tPlusProcessing',y='litterCount',ax=ax)
-ax.set_ylim([0,210])
-ax.set_xlim([0,nestDF['tPlusProcessing'].iloc[-1]])
-ax.legend().remove()
-ax.set_ylabel('Litter in Nest')
-ax.set_xlabel('Time in seconds')
-fig.savefig('plots/' + vidname[:-4] + '.pdf',bbox_inches='tight')
+def loopThroughDataFiles():
+    timeStep = 1 # second
+    robotVelocity = 0.605 #metres/seconds
+    for initialWorldStateFile in glob('CSVresults/*.csv'):
+        initialWorldStateFile = ntpath.basename(initialWorldStateFile)
+        for wayPointsFile in glob('results/' + initialWorldStateFile[:-4] + '*'):
+            wayPointsFile = ntpath.basename(wayPointsFile)
+            for litProcessingTime in [0,5]:
+                simulateForagingAndSaveResults(initialWorldStateFile,wayPointsFile,timeStep,litProcessingTime,robotVelocity)
+#   
+if __name__ == '__main__':
+    loopThroughDataFiles()
