@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import re
 from scipy.spatial.distance import euclidean
+import matplotlib.pyplot as plt
 
 def loadInitialState(stateCSV):
     csvdf = pd.read_csv(stateCSV,sep=',')
@@ -22,12 +23,13 @@ def loadInitialState(stateCSV):
     littersDF.drop(columns = ['name','yaw'], inplace = True)
     littersDF.columns.name = 'poseNtime'
     
-    nestDF = pd.DataFrame([0],columns=['litterCount'],index=[t])
+    nestDF = pd.DataFrame(np.array([[0,0]]),columns=['litterCount','tPlusProcessing'],index=[t])
     nestDF.index.name = 'time'
     return robotsDF,littersDF,nestDF#robots,xyYaw#csvdf #initialState
 
-def loadforagingWayPoints(wayPointsFile):
+def loadforagingWayPointsAndWaitingTimes(wayPointsFile):
     wayPointsDict = {}
+    robotsWaitingTime = {}
     robot = None
     with open(wayPointsFile, 'r') as f:
         for row in f:
@@ -38,16 +40,18 @@ def loadforagingWayPoints(wayPointsFile):
                 if 'robot' in row[-1]:
                     robot = row[-1]
                     wayPointsDict[robot] = []
+                    robotsWaitingTime[robot] = 0
                 elif robot != None and len(row) == 3:
                     wayPointsDict[robot].append([float(row[0]), float(row[1]), row[2]])
                         
             #print(row)
     
-    return wayPointsDict
+    return wayPointsDict,robotsWaitingTime
 
 
 def computeRobotStep(robotData,robotWayPoints,moveDistance):
     goalx,goaly,activity = robotWayPoints[0]
+    action = None
 #    print(goalx,goaly,robotData['x'],robotData['y'])
     #compute distance from goal
     distanceFromGoal = euclidean([goalx, goaly], [robotData['x'], robotData['y']])
@@ -61,6 +65,7 @@ def computeRobotStep(robotData,robotWayPoints,moveDistance):
         robotData['y'] = goaly
         robotWayPoints.pop(0)#pop current goal to move to next goal
         #execute activity
+        action = activity
 #        if 'litter' in activity:
 #            #pick up the particular litter and update littersDF
 #        elif 'reuse' in activity.tolower() or 'end' in activity.tolower():
@@ -68,7 +73,7 @@ def computeRobotStep(robotData,robotWayPoints,moveDistance):
         
         #compute new heading:  get next goal ie waypoint
         if len(robotWayPoints) > 0: #no more waypoints for the robot
-            goalx,goaly,activity = robotWayPoints[0]
+            goalx,goaly,_ = robotWayPoints[0]
             robotData['yaw'] = np.arctan2(goaly - robotData['y'], goalx - robotData['x'])
             #compute new location of robot
             movementY = np.sin(robotData['yaw']) * (moveDistance - distanceFromGoal)
@@ -80,29 +85,74 @@ def computeRobotStep(robotData,robotWayPoints,moveDistance):
     robotData['y'] += movementY
         
     
-    return robotData,robotWayPoints
+    return robotData,robotWayPoints,action
 
-robotsDF,littersDF,nestDF = loadInitialState('CSVresults/20180208_w_swarm1_circular_one_region_cluster.csv')
-foragingWayPointsDF = loadforagingWayPoints('results/one_region_cluster-200.xy')
+initialWorldStateFile = '20180208_w_swarm1_circular_one_region_cluster.csv'
+wayPointsFile = 'one_region_cluster-200.xy'
+robotsDF,littersDF,nestDF = loadInitialState('CSVresults/' + initialWorldStateFile)
+foragingWayPointsDF,robotsWaitingTime = loadforagingWayPointsAndWaitingTimes('results/' + wayPointsFile)
 t = 0
 timeStep = 1 # second
+litProcessingTime = 5 # seconds
 robotVelocity = 0.605 #metres/seconds
 moveDistance = robotVelocity * timeStep # distance is velocity x time
-while t < 100:
+while True:
+    #copy previous state of litter available and litter deposited in nest to default of current state
+    tStr = str(round(t,1))
+    tPlus1 = str(round(t + timeStep, 1))
+    littersDF.loc[:,tPlus1] = littersDF.loc[:,tStr].values
+    nestDF.loc[tPlus1,'litterCount'] = nestDF.loc[tStr,'litterCount']
+    nestDF.loc[tPlus1,'tPlusProcessing'] = nestDF.loc[tStr,'tPlusProcessing'] + timeStep
+    numRobotsFinishedWayPoints = 0
+
     for robot in foragingWayPointsDF.keys():
-        robotData = robotsDF.loc[str(t),robot]
+        action = None
+        robotData = robotsDF.loc[tStr,robot]
         robotWayPoints = foragingWayPointsDF[robot]
 #        if t == 0:#remove start location for robot at initial time step
 #            robotWayPoints.pop(0)
-        if len(robotWayPoints) > 0:
-            robotData,robotWayPoints = computeRobotStep(robotData,robotWayPoints,moveDistance)
-            robotsDF.loc[str(round(t+timeStep,1)),robot] = robotData.values
+        if len(robotWayPoints) > 0 and robotsWaitingTime[robot] <= 0:
+            robotsWaitingTime[robot]  = 0 # by default robot does not wait
+            robotData,robotWayPoints,action = computeRobotStep(robotData,robotWayPoints,moveDistance)
+            if action != None:
+                action = action.lower()
+                if 'litter' in action:
+                    littersDF.loc[action,tPlus1] = False
+                    robotData['litterCount'] += 1
+                    robotsWaitingTime[robot] = litProcessingTime # process picked litter
+                elif 'reuse' in action or 'end' in action:
+                    nestDF.loc[tPlus1,'litterCount'] = nestDF.loc[tPlus1,'litterCount'] + robotData['litterCount']
+                    nestDF.loc[tPlus1,'tPlusProcessing'] = nestDF.loc[tPlus1,'tPlusProcessing'] + robotData['litterCount']
+                    
+                    robotData['litterCount'] = 0
+            robotsDF.loc[tPlus1,robot] = robotData.values
 #            print(robotData)
 #            print(robotsDF.loc[str(t+timeStep),robot])
+            
         else:
-            robotsDF.loc[str(round(t+timeStep,1)),robot] = robotData.values
+            robotsDF.loc[tPlus1,robot] = robotData.values
+            robotsWaitingTime[robot] -= timeStep
+        if len(robotWayPoints) == 0:
+            numRobotsFinishedWayPoints += 1
+    if numRobotsFinishedWayPoints == len(foragingWayPointsDF.keys()):
+        print('Task completed')
+        break
+#        if action != None:
+            
     #increase time 
     t = round(t + timeStep,1)
     
     print(t)
-        
+import animateForaging
+ani = animateForaging.animateForaging(robotsDF,littersDF,nestDF,foragingWayPointsDF.keys())
+vidname = wayPointsFile.replace('.xy','-litProcessing-') + str(litProcessingTime) + 's.mp4'
+ani.save('plots/' + vidname)
+
+fig,ax = plt.subplots()
+nestDF.plot(x='tPlusProcessing',y='litterCount',ax=ax)
+ax.set_ylim([0,210])
+ax.set_xlim([0,nestDF['tPlusProcessing'].iloc[-1]])
+ax.legend().remove()
+ax.set_ylabel('Litter in Nest')
+ax.set_xlabel('Time in seconds')
+fig.savefig('plots/' + vidname[:-4] + '.pdf',bbox_inches='tight')
