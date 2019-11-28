@@ -9,20 +9,23 @@ import numpy as np
 def loadDF(fname):
     robotDF,litterDF,nestDF = pd.DataFrame(),pd.DataFrame(),pd.DataFrame()
     robots = []
-#    print(fname)
+    print(fname)
+    expName = None
     for f in glob(fname):
+        print(f)
         if 'litters' in f:
             litterDF = pd.read_csv(f,sep=',',index_col=0)
             
         elif 'robot' in f:
             robotDF = pd.read_csv(f,sep=',',index_col=0,header=[0, 1], skipinitialspace=True)
+            expName = f.replace('.csv','')
             with open(f) as f1:
                 robots = f1.readline().strip('\n').split(',')
                 robots = [i for i in list(dict.fromkeys(robots)) if 'robot' in i]
         elif 'nest' in f:
             nestDF = pd.read_csv(f,sep=',',index_col=0)
     
-    return robotDF,litterDF.T,nestDF,robots
+    return expName,robotDF,litterDF.T,nestDF,robots
 
 def toBoolean(x):
     x[x > 0] = True
@@ -52,10 +55,15 @@ def generateSimulationVideo(algorithm,t,world,filePath,worldXlength = 50, worldY
     ani.save(filePath + '/' + world + '-' + t + '.mp4',fps=30)
     print('finished')
 def icra2020SimVideos(folderPath):
-    algorithms = ['N0-Q1','N10-Q10','N100-Q40','RW-0p0025P','N100-Q1','N100-Q8',\
-                  'N100-Q20','N100-Q80','N100-Q120']
-    for folder in glob(folderPath + '*/'):
-        print(folder)
+    print(folderPath)
+    algorithms = ['N0-Q1-mSSD124','N0-Q1-mSSD220','N0-Q1-yolo3t128','N0-Q1-yolo3t224',
+     'N100-Q40-mSSD124','N100-Q40-mSSD220','N100-Q40-yolo3t128','N100-Q40-yolo3t224',
+     'RW-0p0025P-mSSD124','RW-0p0025P-mSSD220','RW-0p0025P-yolo3t128','RW-0p0025P-yolo3t224']
+    
+#        ['N0-Q1','N10-Q10','N100-Q40','RW-0p0025P','N100-Q1','N100-Q8',\
+#                  'N100-Q20','N100-Q80','N100-Q120']
+    for folder in glob(folderPath + '/*/'):
+#        print(folder)
         if '100m' in folder:
             xlength = 100
             ylength = 100
@@ -66,7 +74,8 @@ def icra2020SimVideos(folderPath):
 #            if alg in ['N100-Q40']:
 #                continue
             print('\t',alg)
-            robotsDF,litterDF,nestDF,robots = loadDF(folder + alg + '_*')
+            fname,robotsDF,litterDF,nestDF,robots = \
+                loadDF(f"{folder}{alg}*_{np.random.choice(np.arange(1,31,dtype=np.int)):03d}_*_*.csv")
             if len(robots) == 0:
                 continue
 #            print('robots',robotsDF.shape)
@@ -74,9 +83,9 @@ def icra2020SimVideos(folderPath):
             litterDF.columns = list(litterDF.columns[0:2]) + list(robotsDF.index)
             litterDF.iloc[:,2:] = litterDF.iloc[:,2:].astype(np.int).astype(np.bool)
             ani = animateForagingStates.animateForagingStates(robotsDF,litterDF,nestDF,robots,worldXlength = xlength, worldYlength = ylength)
-            ani.save(folder + alg + '.mp4',fps=30,dpi=300,)
+            ani.save(fname + '.mp4',fps=30,dpi=300,)
             
 if __name__ == '__main__':
-    folderPath = 'icra2020/simVideos/'
+    folderPath = '/home/elcymon/containers/swarm_sim/results/model-s2s-u2s'#'icra2020/simVideos'
     icra2020SimVideos(folderPath)
 #    generateSimulationVideos()
