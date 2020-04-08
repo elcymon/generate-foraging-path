@@ -64,7 +64,7 @@ def animateForagingStates(robotsDF,littersDF,nestDF,robots,worldXlength = 50, wo
         litter_particles.set_data(litterObjects['x'],litterObjects['y'])
         litter_particles.set_markersize(2)
         
-        time_text.set_text('{} seconds'.format(i))
+        time_text.set_text('t = {} seconds, picked = {} litters'.format(i,nestDF.loc[i,'pickedLitter']))
         
         searching_particles.set_data(sx,sy)
         searching_particles.set_markersize(5)

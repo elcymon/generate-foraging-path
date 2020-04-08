@@ -56,9 +56,11 @@ def generateSimulationVideo(algorithm,t,world,filePath,worldXlength = 50, worldY
     print('finished')
 def icra2020SimVideos(folderPath):
     print(folderPath)
-    algorithms = ['N0-Q1-mSSD124','N0-Q1-mSSD220','N0-Q1-yolo3t128','N0-Q1-yolo3t224',
-     'N100-Q40-mSSD124','N100-Q40-mSSD220','N100-Q40-yolo3t128','N100-Q40-yolo3t224',
-     'RW-0p0025P-mSSD124','RW-0p0025P-mSSD220','RW-0p0025P-yolo3t128','RW-0p0025P-yolo3t224']
+    algorithms = ['RW-s2s0p001-u2s0p1','RW-s2s0p001-u2s0p01']
+    
+#    ['N0-Q1-mSSD124','N0-Q1-mSSD220','N0-Q1-yolo3t128','N0-Q1-yolo3t224',
+#     'N100-Q40-mSSD124','N100-Q40-mSSD220','N100-Q40-yolo3t128','N100-Q40-yolo3t224',
+#     'RW-0p0025P-mSSD124','RW-0p0025P-mSSD220','RW-0p0025P-yolo3t128','RW-0p0025P-yolo3t224']
     
 #        ['N0-Q1','N10-Q10','N100-Q40','RW-0p0025P','N100-Q1','N100-Q8',\
 #                  'N100-Q20','N100-Q80','N100-Q120']
@@ -74,8 +76,10 @@ def icra2020SimVideos(folderPath):
 #            if alg in ['N100-Q40']:
 #                continue
             print('\t',alg)
+#            csvfile = f"{folder}{alg}*_{np.random.choice(np.arange(1,31,dtype=np.int)):03d}_*_*.csv"
+            csvfile = f"{folder}{alg}*_001_*_*.csv"
             fname,robotsDF,litterDF,nestDF,robots = \
-                loadDF(f"{folder}{alg}*_{np.random.choice(np.arange(1,31,dtype=np.int)):03d}_*_*.csv")
+                loadDF(csvfile)
             if len(robots) == 0:
                 continue
 #            print('robots',robotsDF.shape)
