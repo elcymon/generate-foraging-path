@@ -26,16 +26,30 @@ def name_image(filename):
         
     return f'{folder}{world}{sz}-{basename}'
 
-def plotModelPose(filename,robotsdf,nestdf,littersdf,worldXlength,worldYlength,pickedlitter=[0,60,120,180,200]):
+def plotModelPose(filename,robotsdf,nestdf,littersdf,worldXlength,worldYlength,
+                  pickedlitter=None,times=None):
     cmap = plt.get_cmap('inferno')
     fig = plt.figure(figsize=(12,12))
     n = 1
-    for p in pickedlitter:
+    if times is None:
+        rows = pickedlitter
+        col = 'pickedLitter'
+    else:
+        rows = times
+        col = 'time'
+    for r in rows:
         
 #        plt.tight_layout(pad=0.1)
-        nlitter = nestdf.loc[nestdf['pickedLitter']>=p,:].head(1)
+        if col == 'time':
+            nlitter = nestdf.loc[nestdf.index >= r,:].head(1)
+            p = nlitter.loc[r,'pickedLitter']
+        else:
+            nlitter = nestdf.loc[nestdf['pickedLitter']>=r,:].head(1)
+            p = r
+        
         t = nlitter.index[0]
         litters = littersdf.loc[['x','y',f'{t:.06f}'],:].dropna(axis=1)
+#        litters  = litters.loc[:,litters.loc[f'{t:.06f}',:] > 0]
         robots = robotsdf.loc[t,:]
         robotstates = robots.xs('state',level=1)
         
@@ -60,7 +74,7 @@ def plotModelPose(filename,robotsdf,nestdf,littersdf,worldXlength,worldYlength,p
                 'D',color=cmap(0.65),label='homing')
         #plot nest
         ax.plot([0],[0],'P',markersize=12,color=cmap(0),label='nest')
-        ax.text(0.0,1.03,f'picked {p} in {t:.0f}s',size=14,weight='bold',transform=ax.transAxes)
+        ax.text(0.0,1.03,f'picked {p} in {round(t,-1):.0f}s',size=14,weight='bold',transform=ax.transAxes)
         
         n +=1
         ax.set_xticks([])
@@ -72,8 +86,10 @@ def plotModelPose(filename,robotsdf,nestdf,littersdf,worldXlength,worldYlength,p
     plt.close(fig)
 
 def swarmState():
+#    folder = '/home/elcymon/containers/swarm_sim/results/alns-gazebo/*/*_001_*littersFile.csv'
     folder = '/media/elcymon/files/phd/swarm_sim/n0q1_scalability/try2/*/r*/*_001_*littersFile.csv'
     pickedlitters = [0,60,120,180]
+    times = [49.975,99.975,149.975,199.975]
     for f in glob(folder):
         print(f)
         nestdf = pd.read_csv(f.replace('littersFile','nestFile'),index_col=0)
@@ -86,7 +102,7 @@ def swarmState():
             worldXlength = 50
             worldYlength = 50
         plotModelPose(f,robotsdf,nestdf,littersdf,worldXlength,worldYlength,
-                      pickedlitter=pickedlitters)
+                      pickedlitter=pickedlitters,times=times)
 #        return
 #        return nestdf,robotsdf,littersdf
 if __name__ == '__main__':
